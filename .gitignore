@@ -1,0 +1,18 @@
+# Dependencies
+node_modules
+
+# Build Artifacts & Caches
+.next/
+out/
+dist/
+
+# Logs
+pnpm-debug.log*
+
+# Environment variables
+.env
+.env*.local
+
+# IDE and OS files
+.DS_Store
+.vscode
