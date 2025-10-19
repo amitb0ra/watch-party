@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState, FormEvent, useRef } from "react";
 import { socket } from "@/lib/socket";
-import ReactPlayer from "react-player/youtube";
+// import ReactPlayer from "react-player";
 
 interface Message {
   id: string;
@@ -26,7 +26,7 @@ export default function RoomPage({
   ); // A default video
   const [inputUrl, setInputUrl] = useState("");
   const [isPlaying, setIsPlaying] = useState(false);
-  const playerRef = useRef<ReactPlayer>(null);
+  // const playerRef = useRef<ReactPlayer>(null);
 
   // --- Event Handlers ---
 
@@ -81,7 +81,7 @@ export default function RoomPage({
     });
 
     socket.on("seekToTime", (time: number) => {
-      playerRef.current?.seekTo(time, "seconds");
+      // playerRef.current?.seekTo(time, "seconds");
     });
 
     return () => {
@@ -101,7 +101,7 @@ export default function RoomPage({
         {/* Main content: Video player and URL input */}
         <main className="flex-1 flex flex-col p-4 gap-4">
           <div className="w-full aspect-video bg-black">
-            <ReactPlayer
+            {/* <ReactPlayer
               ref={playerRef}
               url={videoUrl}
               width="100%"
@@ -111,7 +111,7 @@ export default function RoomPage({
               onPlay={handlePlay}
               onPause={handlePause}
               onSeek={handleSeek}
-            />
+            /> */}
           </div>
           <form onSubmit={handleUrlChange} className="flex gap-2">
             <input
