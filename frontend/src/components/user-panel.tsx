@@ -20,33 +20,44 @@ interface UserPanelProps {
   onUserNameChange?: (name: string) => void;
 }
 
+// Mock Data
+const mockUsers: User[] = [
+  {
+    id: "1",
+    name: "Sezal",
+    joinedAt: "17:15:00",
+    status: "active",
+    isMuted: false,
+    isAudioMuted: false,
+  },
+  {
+    id: "2",
+    name: "Alex",
+    joinedAt: "17:16:30",
+    status: "watching",
+    isMuted: false,
+    isAudioMuted: false,
+  },
+  {
+    id: "3",
+    name: "Jordan",
+    joinedAt: "17:17:45",
+    status: "active",
+    isMuted: true,
+    isAudioMuted: false,
+  },
+];
+
+const avatarColors = [
+  "bg-blue-500",
+  "bg-purple-500",
+  "bg-pink-500",
+  "bg-green-500",
+  "bg-orange-500",
+];
+
 export function UserPanel({ userName, onUserNameChange }: UserPanelProps) {
-  const [users, setUsers] = useState<User[]>([
-    {
-      id: "1",
-      name: "Sezal",
-      joinedAt: "17:15:00",
-      status: "active",
-      isMuted: false,
-      isAudioMuted: false,
-    },
-    {
-      id: "2",
-      name: "Alex",
-      joinedAt: "17:16:30",
-      status: "watching",
-      isMuted: false,
-      isAudioMuted: false,
-    },
-    {
-      id: "3",
-      name: "Jordan",
-      joinedAt: "17:17:45",
-      status: "active",
-      isMuted: true,
-      isAudioMuted: false,
-    },
-  ]);
+  const [users, setUsers] = useState<User[]>(mockUsers);
   const [editableName, setEditableName] = useState(userName);
   const [isSavingName, setIsSavingName] = useState(false);
 
@@ -99,23 +110,18 @@ export function UserPanel({ userName, onUserNameChange }: UserPanelProps) {
   };
 
   const handleSaveName = () => {
-    if (editableName.trim()) {
-      localStorage.setItem("watchparty_userName", editableName);
-      onUserNameChange?.(editableName);
+    const newName = editableName.trim();
+    if (newName) {
+      localStorage.setItem("watchparty_userName", newName);
+      onUserNameChange?.(newName);
       setIsSavingName(false);
     }
   };
 
   const getAvatarColor = (name: string) => {
-    const colors = [
-      "bg-blue-500",
-      "bg-purple-500",
-      "bg-pink-500",
-      "bg-green-500",
-      "bg-orange-500",
-    ];
+    if (!name) return avatarColors[0];
     const hash = name.charCodeAt(0) + name.charCodeAt(name.length - 1);
-    return colors[hash % colors.length];
+    return avatarColors[hash % avatarColors.length];
   };
 
   return (
@@ -190,6 +196,7 @@ export function UserPanel({ userName, onUserNameChange }: UserPanelProps) {
                     onClick={() => removeUser(user.id)}
                     className="p-1 hover:bg-destructive/10 rounded text-muted-foreground hover:text-destructive transition-colors"
                     title="Remove user"
+                    type="button"
                   >
                     <X className="w-4 h-4" />
                   </button>

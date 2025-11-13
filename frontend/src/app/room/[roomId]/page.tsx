@@ -1,26 +1,21 @@
 "use client";
 
-import { useEffect, useState, FormEvent, useRef, use } from "react";
+import {
+  useEffect,
+  useState,
+  FormEvent,
+  useRef,
+  useCallback,
+  use,
+} from "react";
 import { socket } from "@/lib/socket";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChatPanel } from "@/components/chat-panel";
 import { UserPanel } from "@/components/user-panel";
-import { HomeIcon, Share2, X } from "lucide-react";
-import React from "react";
+import { Share2, X, Video } from "lucide-react";
 import ReactPlayer from "react-player";
-
-interface Message {
-  id: string;
-  text: string;
-}
-
-interface WatchRoomProps {
-  roomId: string;
-  userName: string;
-  onLeave: () => void;
-  onUserNameChange?: (name: string) => void;
-}
+import { Input } from "@/components/ui/input";
 
 export default function RoomPage({
   params,
@@ -28,19 +23,29 @@ export default function RoomPage({
   params: Promise<{ roomId: string }>;
 }) {
   const { roomId } = use(params);
+  const playerRef = useRef<HTMLVideoElement | null>(null);
   const [userName, setUserName] = useState<string>("Guest");
+  const [showInviteModal, setShowInviteModal] = useState(false);
+
+  // Player state
+  const [videoUrl, setVideoUrl] = useState<string | undefined>(undefined);
+  const [inputUrl, setInputUrl] = useState("");
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  // Callback to set the ref
+  const setPlayerRef = useCallback((player: HTMLVideoElement | null) => {
+    if (player) {
+      playerRef.current = player;
+    }
+  }, []);
+
   const onLeave = () => {
-    // default behavior: navigate back to previous page
     if (typeof window !== "undefined") window.history.back();
   };
+
   const onUserNameChange = (name?: string) => {
     if (name) setUserName(name);
   };
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentUrl, setCurrentUrl] = useState("https://www.google.com");
-  const [quality, setQuality] = useState("720p");
-  const [resolution, setResolution] = useState("Standard");
-  const [showInviteModal, setShowInviteModal] = useState(false);
 
   const handleInvite = () => {
     const inviteLink = `${window.location.origin}?room=${roomId}`;
@@ -48,103 +53,68 @@ export default function RoomPage({
     setShowInviteModal(false);
   };
 
-  // removed erroneous duplicate roomId extraction (roomId comes from props)
-
-  // Chat state
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
-
-  // Player state
-  const [videoUrl, setVideoUrl] = useState(
-    "https://www.youtube.com/watch?v=LXb3EKWsInQ"
-  ); // A default video
-  const [inputUrl, setInputUrl] = useState("");
-  // player playback uses the top-level isPlaying state declared above
-  const playerRef = useRef(null);
-
   // --- Event Handlers ---
-
-  const handleSendMessage = (e: FormEvent) => {
-    e.preventDefault();
-    if (input.trim()) {
-      socket.emit("sendMessage", { roomId, message: input });
-      setInput("");
-    }
-  };
-
   const handleUrlChange = (e: FormEvent) => {
     e.preventDefault();
     if (inputUrl.trim()) {
-      socket.emit("changeVideo", { roomId, url: inputUrl });
+      socket.emit("change-video", { roomId, url: inputUrl });
     }
   };
 
-  const handlePlay = () => {
-    const currentTime = 0;
+  const sendStateUpdate = (playing: boolean) => {
+    const currentTime = playerRef.current?.currentTime ?? 0;
     socket.emit("update-state", {
       roomId,
       videoUrl,
       currentTime,
-      isPlaying: true,
+      isPlaying: playing,
     });
+  };
+
+  const handlePlay = () => {
     setIsPlaying(true);
+    sendStateUpdate(true);
   };
 
   const handlePause = () => {
-    const currentTime = 0;
-    socket.emit("update-state", {
-      roomId,
-      videoUrl,
-      currentTime,
-      isPlaying: false,
-    });
     setIsPlaying(false);
+    sendStateUpdate(false);
   };
 
-  const handleSeek = (seconds: number) => {
-    socket.emit("seek", { roomId, time: seconds });
+  const handleSeeked = () => {
+    sendStateUpdate(isPlaying);
   };
 
   // --- Socket Listeners ---
-
   useEffect(() => {
     socket.connect();
-    socket.emit("joinRoom", roomId);
+    socket.emit("join-room", roomId);
 
-    // Chat listeners
-    socket.on("receiveMessage", (newMessage: Message) => {
-      setMessages((prev) => [...prev, newMessage]);
-    });
-
-    // Player listeners
-    socket.on("videoChanged", (newUrl: string) => {
-      setVideoUrl(newUrl);
-      setInputUrl(newUrl);
-    });
-
-    socket.on("playerStateUpdated", (playing: boolean) => {
-      setIsPlaying(playing);
-    });
-
-    socket.on("seekToTime", (time: number) => {
-      // playerRef.current?.seekTo(time, "seconds");
-    });
+    const seekToTime = (time: number) => {
+      if (playerRef.current) {
+        if (Math.abs(playerRef.current.currentTime - time) > 1.5) {
+          playerRef.current.currentTime = time;
+        }
+      }
+    };
 
     socket.on("sync-state", (state) => {
       console.log("🔄 Syncing with room:", state);
-      setVideoUrl(state.videoUrl || videoUrl);
+      setVideoUrl(state.videoUrl || undefined);
       setIsPlaying(state.isPlaying);
-      if (playerRef.current) {
-        // playerRef.current.seekTo(state.currentTime || 0, "seconds");
-      }
+      seekToTime(state.currentTime);
     });
 
     socket.on("state-updated", (state) => {
       console.log("🛰 Updated room state:", state);
+      setVideoUrl(state.videoUrl || undefined);
       setIsPlaying(state.isPlaying);
-      if (playerRef.current) {
-        // playerRef.current.seekTo(state.currentTime || 0, "seconds");
-      }
+      seekToTime(state.currentTime);
+    });
+
+    socket.on("video-changed", (newUrl: string) => {
+      setVideoUrl(newUrl || undefined);
+      setInputUrl(newUrl || "");
     });
 
     return () => {
@@ -217,70 +187,45 @@ export default function RoomPage({
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Side - Browser */}
+        {/* Left Side - Player */}
         <div className="flex-1 flex flex-col border-r border-border">
-          {/* Browser Controls */}
+          {/* Player Controls */}
           <div className="bg-card border-b border-border p-4 space-y-3">
-            <div className="flex gap-2 flex-wrap items-center">
-              <form onSubmit={handleUrlChange} className="flex gap-2 flex-1">
-                <input
-                  type="text"
-                  value={inputUrl}
-                  onChange={(e) => setInputUrl(e.target.value)}
-                  placeholder="Enter YouTube URL..."
-                  className="flex-1 px-3 py-2 border border-border rounded bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-                <Button type="submit" className="bg-green-500">
-                  Load Video
-                </Button>
-              </form>
-            </div>
+            <form onSubmit={handleUrlChange} className="flex gap-2">
+              <Input
+                type="text"
+                placeholder="Enter video URL..."
+                value={inputUrl}
+                onChange={(e) => setInputUrl(e.target.value)}
+                className="flex-1"
+              />
+              <Button type="submit">Load Video</Button>
+            </form>
           </div>
 
           {/* Video Player */}
-          <div className="flex-1 overflow-auto bg-background">
-            <ReactPlayer
-              ref={playerRef}
-              width="100%"
-              height="100%"
-              src={videoUrl}
-              controls={true}
-              playing={isPlaying}
-              onPlay={handlePlay}
-              onPause={handlePause}
-              // onSeek={handleSeek}
-            />
-          </div>
-
-          {/* Playback Controls */}
-          <div className="bg-card border-t border-border p-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline">
-                ⏮
-              </Button>
-              <Button size="sm" variant="outline">
-                {isPlaying ? "⏸" : "▶"}
-              </Button>
-              <Button size="sm" variant="outline">
-                ⏭
-              </Button>
-              <span className="text-sm text-muted-foreground ml-2">
-                00:32 / 02:15:00
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">🔊</span>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                defaultValue="70"
-                className="w-24"
+          <div className="flex-1 overflow-auto bg-black">
+            {videoUrl ? (
+              <ReactPlayer
+                ref={setPlayerRef as any}
+                width="100%"
+                height="100%"
+                src={videoUrl}
+                controls={true}
+                playing={isPlaying}
+                onPlay={handlePlay}
+                onPause={handlePause}
+                onSeeked={handleSeeked}
               />
-              <Button size="sm" variant="outline">
-                ⛶
-              </Button>
-            </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                <Video className="w-16 h-16 mb-4" />
+                <p>No video loaded</p>
+                <p className="text-sm">
+                  Paste a video URL above to start watching.
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -293,7 +238,7 @@ export default function RoomPage({
             </TabsList>
 
             <TabsContent value="chat" className="flex-1 flex flex-col">
-              <ChatPanel userName={userName} />
+              <ChatPanel userName={userName} roomId={roomId} />
             </TabsContent>
 
             <TabsContent value="people" className="flex-1 flex flex-col">
