@@ -51,10 +51,10 @@ export function ChatPanel({ userName, roomId }: ChatPanelProps) {
       setMessages((prev) => [...prev, msg]);
     };
 
-    socket.on("receive-message", handleReceiveMessage);
+    socket.on("chat:receive", handleReceiveMessage);
 
     return () => {
-      socket.off("receive-message", handleReceiveMessage);
+      socket.off("chat:receive", handleReceiveMessage);
     };
   }, []);
 
@@ -78,7 +78,7 @@ export function ChatPanel({ userName, roomId }: ChatPanelProps) {
 
   const sendMessage = () => {
     if (newMessage.trim()) {
-      socket.emit("send-message", {
+      socket.emit("chat:send", {
         roomId,
         message: newMessage,
         userName,
@@ -88,7 +88,9 @@ export function ChatPanel({ userName, roomId }: ChatPanelProps) {
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (
+    e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
@@ -160,7 +162,7 @@ export function ChatPanel({ userName, roomId }: ChatPanelProps) {
               placeholder="Enter a message..."
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
+              onKeyDown={handleKeyDown}
               className="text-sm border-0 bg-transparent p-0 focus-visible:ring-0 flex-1"
             />
 

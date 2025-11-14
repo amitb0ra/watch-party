@@ -16,23 +16,27 @@ import { UserPanel } from "@/components/user-panel";
 import { Share2, X, Video } from "lucide-react";
 import ReactPlayer from "react-player";
 import { Input } from "@/components/ui/input";
+import { useRouter } from "next/navigation";
+import { generateRandomName } from "@/lib/random-name";
 
 export default function RoomPage({
   params,
 }: {
   params: Promise<{ roomId: string }>;
 }) {
+  const router = useRouter();
   const { roomId } = use(params);
   const playerRef = useRef<HTMLVideoElement | null>(null);
-  const [userName, setUserName] = useState<string>("Guest");
+  const [userName, setUserName] = useState<string>(generateRandomName);
   const [showInviteModal, setShowInviteModal] = useState(false);
-
-  // Player state
   const [videoUrl, setVideoUrl] = useState<string | undefined>(undefined);
-  const [inputUrl, setInputUrl] = useState("");
+  const [inputUrl, setInputUrl] = useState(
+    "https://www.youtube.com/watch?v=ri1Ar5nEq4s" // for testing :)
+  );
   const [isPlaying, setIsPlaying] = useState(false);
 
-  // Callback to set the ref
+  const getCurrentTime = (): number => playerRef.current?.currentTime ?? 0;
+
   const setPlayerRef = useCallback((player: HTMLVideoElement | null) => {
     if (player) {
       playerRef.current = player;
@@ -40,7 +44,8 @@ export default function RoomPage({
   }, []);
 
   const onLeave = () => {
-    if (typeof window !== "undefined") window.history.back();
+    socket.disconnect();
+    router.push("/");
   };
 
   const onUserNameChange = (name?: string) => {
@@ -53,78 +58,83 @@ export default function RoomPage({
     setShowInviteModal(false);
   };
 
-  // --- Event Handlers ---
   const handleUrlChange = (e: FormEvent) => {
     e.preventDefault();
     if (inputUrl.trim()) {
-      socket.emit("change-video", { roomId, url: inputUrl });
+      socket.emit("video:change", { roomId, url: inputUrl });
     }
-  };
-
-  const sendStateUpdate = (playing: boolean) => {
-    const currentTime = playerRef.current?.currentTime ?? 0;
-    socket.emit("update-state", {
-      roomId,
-      videoUrl,
-      currentTime,
-      isPlaying: playing,
-    });
   };
 
   const handlePlay = () => {
     setIsPlaying(true);
-    sendStateUpdate(true);
+    socket.emit("video:play", { roomId, time: getCurrentTime() });
   };
 
   const handlePause = () => {
     setIsPlaying(false);
-    sendStateUpdate(false);
+    socket.emit("video:pause", { roomId, time: getCurrentTime() });
   };
 
   const handleSeeked = () => {
-    sendStateUpdate(isPlaying);
+    socket.emit("video:seek", { roomId, time: getCurrentTime() });
   };
 
-  // --- Socket Listeners ---
   useEffect(() => {
     socket.connect();
-    socket.emit("join-room", roomId);
+    socket.emit("room:join", roomId);
 
     const seekToTime = (time: number) => {
       if (playerRef.current) {
-        if (Math.abs(playerRef.current.currentTime - time) > 1.5) {
+        const timeDifference = Math.abs(playerRef.current.currentTime - time);
+        if (timeDifference > 1.5) {
           playerRef.current.currentTime = time;
         }
       }
     };
 
-    socket.on("sync-state", (state) => {
-      console.log("🔄 Syncing with room:", state);
+    socket.on("room:sync", (state) => {
+      console.log("Room state synced:", state);
       setVideoUrl(state.videoUrl || undefined);
       setIsPlaying(state.isPlaying);
       seekToTime(state.currentTime);
     });
 
-    socket.on("state-updated", (state) => {
-      console.log("🛰 Updated room state:", state);
+    socket.on("video:changed", (state) => {
+      console.log("Video changed by other user:", state);
       setVideoUrl(state.videoUrl || undefined);
       setIsPlaying(state.isPlaying);
       seekToTime(state.currentTime);
     });
 
-    socket.on("video-changed", (newUrl: string) => {
-      setVideoUrl(newUrl || undefined);
-      setInputUrl(newUrl || "");
+    socket.on("video:played", (data: { time: number }) => {
+      console.log("Video played by other user");
+      setIsPlaying(true);
+      seekToTime(data.time);
+    });
+
+    socket.on("video:paused", (data: { time: number }) => {
+      console.log("Video paused by other user");
+      setIsPlaying(false);
+      seekToTime(data.time);
+    });
+
+    socket.on("video:seeked", (data: { time: number }) => {
+      console.log("Video seeked by other user");
+      seekToTime(data.time);
     });
 
     return () => {
+      socket.off("room:sync");
+      socket.off("video:changed");
+      socket.off("video:played");
+      socket.off("video:paused");
+      socket.off("video:seeked");
       socket.disconnect();
     };
   }, [roomId]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Top Navigation */}
       <div className="bg-card border-b border-border p-4 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -156,7 +166,6 @@ export default function RoomPage({
         </div>
       </div>
 
-      {/* Invite Modal */}
       {showInviteModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-card border border-border rounded-lg p-6 max-w-sm w-full mx-4 space-y-4">
@@ -185,11 +194,8 @@ export default function RoomPage({
         </div>
       )}
 
-      {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Side - Player */}
         <div className="flex-1 flex flex-col border-r border-border">
-          {/* Player Controls */}
           <div className="bg-card border-b border-border p-4 space-y-3">
             <form onSubmit={handleUrlChange} className="flex gap-2">
               <Input
@@ -203,11 +209,10 @@ export default function RoomPage({
             </form>
           </div>
 
-          {/* Video Player */}
           <div className="flex-1 overflow-auto bg-black">
             {videoUrl ? (
               <ReactPlayer
-                ref={setPlayerRef as any}
+                ref={setPlayerRef}
                 width="100%"
                 height="100%"
                 src={videoUrl}
@@ -229,7 +234,6 @@ export default function RoomPage({
           </div>
         </div>
 
-        {/* Right Side - Chat & Users */}
         <div className="w-80 flex flex-col border-l border-border bg-card">
           <Tabs defaultValue="chat" className="flex-1 flex flex-col">
             <TabsList className="grid w-full grid-cols-2 rounded-none border-b border-border">

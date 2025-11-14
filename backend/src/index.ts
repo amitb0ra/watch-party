@@ -63,43 +63,52 @@ app.post("/api/join-room", (req, res) => {
 io.on("connection", (socket: SocketWithRoom) => {
   console.log(`[Socket.IO] User connected: ${socket.id}`);
 
-  socket.on("join-room", (roomId: string) => {
-    if (!activeRooms.has(roomId)) {
-      console.warn(`[Socket.IO] Invalid room join attempt: ${roomId}`);
-      socket.emit("error", "Room not found");
-      return;
-    }
+  socket.on("room:join", (roomId: string) => {
+    // if (!activeRooms.has(roomId)) {
+    //   console.warn(`[Socket.IO] Invalid room join attempt: ${roomId}`);
+    //   return;
+    // }
 
     socket.join(roomId);
     socket.roomId = roomId;
     console.log(`[Socket.IO] User ${socket.id} joined room ${roomId}`);
 
     const state = getRoomState(roomId);
-    socket.emit("sync-state", state);
+    socket.emit("room:sync", state);
+  });
+
+  socket.on("video:load", (data: { roomId: string; url: string }) => {
+    const roomState = getRoomState(data.roomId);
+    roomState.videoUrl = data.url;
+    roomState.currentTime = 0;
+    roomState.isPlaying = false;
+    io.to(data.roomId).emit("video:loaded", roomState);
+  });
+
+  socket.on("video:play", (data: { roomId: string; time: number }) => {
+    const roomState = getRoomState(data.roomId);
+    roomState.isPlaying = true;
+    roomState.currentTime = data.time;
+    socket.to(data.roomId).emit("video:played", { time: data.time });
+  });
+
+  socket.on("video:pause", (data: { roomId: string; time: number }) => {
+    const roomState = getRoomState(data.roomId);
+    roomState.isPlaying = false;
+    roomState.currentTime = data.time;
+    socket.to(data.roomId).emit("video:paused", { time: data.time });
+  });
+
+  socket.on("video:seek", (data: { roomId: string; time: number }) => {
+    const roomState = getRoomState(data.roomId);
+    roomState.currentTime = data.time;
+    socket.to(data.roomId).emit("video:seeked", { time: data.time });
   });
 
   socket.on(
-    "update-state",
-    (state: {
-      roomId: string;
-      videoUrl: string;
-      currentTime: number;
-      isPlaying: boolean;
-    }) => {
-      const roomState = getRoomState(state.roomId);
-      Object.assign(roomState, {
-        videoUrl: state.videoUrl,
-        currentTime: state.currentTime,
-        isPlaying: state.isPlaying,
-      });
-      socket.to(state.roomId).emit("state-updated", roomState);
-    }
-  );
-
-  socket.on(
-    "send-message",
+    "chat:send",
     (data: { roomId: string; message: string; userName: string }) => {
-      io.to(data.roomId).emit("receive-message", {
+      io.to(data.roomId).emit("chat:receive", {
         id: `${socket.id}-${Date.now()}`,
         text: data.message,
         user: data.userName,
@@ -112,14 +121,6 @@ io.on("connection", (socket: SocketWithRoom) => {
       });
     }
   );
-
-  socket.on("change-video", (data: { roomId: string; url: string }) => {
-    const roomState = getRoomState(data.roomId);
-    roomState.videoUrl = data.url;
-    roomState.currentTime = 0;
-    roomState.isPlaying = false;
-    io.to(data.roomId).emit("state-updated", roomState);
-  });
 
   socket.on("disconnect", async () => {
     console.log(`[Socket.IO] User disconnected: ${socket.id}`);
