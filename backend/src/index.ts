@@ -77,12 +77,12 @@ io.on("connection", (socket: SocketWithRoom) => {
     socket.emit("room:sync", state);
   });
 
-  socket.on("video:load", (data: { roomId: string; url: string }) => {
+  socket.on("video:change", (data: { roomId: string; url: string }) => {
     const roomState = getRoomState(data.roomId);
     roomState.videoUrl = data.url;
     roomState.currentTime = 0;
     roomState.isPlaying = false;
-    io.to(data.roomId).emit("video:loaded", roomState);
+    io.to(data.roomId).emit("video:changed", roomState);
   });
 
   socket.on("video:play", (data: { roomId: string; time: number }) => {
