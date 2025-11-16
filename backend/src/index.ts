@@ -4,8 +4,8 @@ import { Server, Socket } from "socket.io";
 import cors from "cors";
 import { v4 as uuidv4 } from "uuid";
 import { createClient } from "redis";
-import "dotenv/config";
-
+import dotenv from "dotenv";
+dotenv.config({ path: ".env.local" });
 interface SocketWithRoom extends Socket {}
 
 const app = express();
@@ -24,6 +24,7 @@ app.use(cors());
 app.use(express.json());
 
 const startServer = async () => {
+  console.log(process.env.REDIS_URL);
   const redisClient = createClient({
     url: process.env.REDIS_URL,
   });
@@ -194,7 +195,7 @@ const startServer = async () => {
         // const userCount = await redisClient.sCard(`users:${roomId}`);
         const userList = await redisClient.sMembers(`users:${roomId}`);
         io.to(roomId).emit("room:users_update", userList);
-        
+
         const userCount = userList.length;
 
         console.log(`[Socket.IO] Users left in ${roomId}: ${userCount}`);

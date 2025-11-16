@@ -81,7 +81,7 @@ export default function RoomPage({
   };
 
   const handleInvite = () => {
-    const inviteLink = `${window.location.origin}?room=${roomId}`;
+    const inviteLink = `${window.location.origin}/room/${roomId}`;
     navigator.clipboard.writeText(inviteLink);
     setShowInviteModal(false);
   };
@@ -278,7 +278,7 @@ export default function RoomPage({
               Share this link with your friends to invite them to the room
             </p>
             <div className="bg-muted p-3 rounded border border-border text-sm text-foreground break-all">
-              {`${window.location.origin}?room=${roomId}`}
+              {`${window.location.origin}/room/${roomId}`}
             </div>
             <div className="flex gap-2">
               <Button onClick={handleInvite} className="flex-1">
