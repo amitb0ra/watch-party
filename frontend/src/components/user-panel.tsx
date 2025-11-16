@@ -8,7 +8,7 @@ import { Users, Mic, MicOff, Volume2, VolumeX, X } from "lucide-react";
 import { socket } from "@/lib/socket";
 
 interface UserPanelProps {
-  userName: string;
+  username: string;
   onUserNameChange?: (name: string) => void;
   users: string[];
 }
@@ -22,16 +22,16 @@ const avatarColors = [
 ];
 
 export function UserPanel({
-  userName,
+  username,
   onUserNameChange,
   users,
 }: UserPanelProps) {
-  const [editableName, setEditableName] = useState(userName);
+  const [editableName, setEditableName] = useState(username);
   const [isSavingName, setIsSavingName] = useState(false);
 
   useEffect(() => {
-    setEditableName(userName);
-  }, [userName]);
+    setEditableName(username);
+  }, [username]);
 
   const getAvatarColor = (name: string) => {
     if (!name) return avatarColors[0];
@@ -43,15 +43,15 @@ export function UserPanel({
 
   const handleSaveName = () => {
     const newName = editableName.trim();
-    // Use the `userName` prop as the "oldName"
-    const oldName = userName;
+    // Use the `username` prop as the "oldName"
+    const oldName = username;
 
     if (newName && newName !== oldName) {
       // 1. Tell the backend about the name change *first*.
       socket.emit("user:name_change", { oldName, newName });
 
       // 2. Then, update local state
-      localStorage.setItem("watchparty_userName", newName);
+      localStorage.setItem("username", newName);
       onUserNameChange?.(newName);
       setIsSavingName(false);
     }
@@ -68,7 +68,7 @@ export function UserPanel({
             value={editableName}
             onChange={(e) => {
               setEditableName(e.target.value);
-              setIsSavingName(editableName.trim() !== userName.trim());
+              setIsSavingName(editableName.trim() !== username.trim());
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter") handleSaveName();
@@ -78,7 +78,7 @@ export function UserPanel({
           />
           <Button
             onClick={handleSaveName}
-            disabled={!editableName.trim() || editableName === userName}
+            disabled={!editableName.trim() || editableName === username}
             className="px-4"
             size="sm"
           >
@@ -113,7 +113,7 @@ export function UserPanel({
                   <p className="text-sm font-semibold text-foreground truncate">
                     {name}
                     {/* Show a " (You)" badge if this is the current user */}
-                    {name === userName && (
+                    {name === username && (
                       <span className="text-xs text-muted-foreground">
                         {" "}
                         (You)

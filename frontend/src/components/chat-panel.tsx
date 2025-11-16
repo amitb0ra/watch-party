@@ -16,12 +16,12 @@ import { useTheme } from "next-themes";
 import { type Message } from "@/app/room/[roomId]/page";
 
 interface ChatPanelProps {
-  userName: string;
+  username: string;
   roomId: string;
   messages: Message[];
 }
 
-export function ChatPanel({ userName, roomId, messages }: ChatPanelProps) {
+export function ChatPanel({ username, roomId, messages }: ChatPanelProps) {
   const [newMessage, setNewMessage] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -52,7 +52,7 @@ export function ChatPanel({ userName, roomId, messages }: ChatPanelProps) {
       socket.emit("chat:send", {
         roomId,
         message: newMessage,
-        userName,
+        username,
       });
       setNewMessage("");
       setShowEmojiPicker(false);

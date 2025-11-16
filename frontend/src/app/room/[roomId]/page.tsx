@@ -53,15 +53,17 @@ export default function RoomPage({
   const [users, setUsers] = useState<string[]>([]);
 
   // This localStorage logic is now CRITICAL for the presence system
-  const [userName, setUserName] = useState<string>(() => {
-    const savedName = localStorage.getItem("watchparty_userName");
+  const [username, setUserName] = useState<string | null>(null);
+  useEffect(() => {
+    const savedName = localStorage.getItem("username");
     if (savedName) {
-      return savedName;
+      setUserName(savedName);
+    } else {
+      const newName = generateRandomName();
+      localStorage.setItem("username", newName);
+      setUserName(newName);
     }
-    const newName = generateRandomName();
-    localStorage.setItem("watchparty_userName", newName);
-    return newName;
-  });
+  }, []);
 
   const getCurrentTime = (): number => playerRef.current?.currentTime ?? 0;
 
@@ -108,6 +110,9 @@ export default function RoomPage({
   };
 
   useEffect(() => {
+    if (!username) {
+      return;
+    }
     const validateAndJoinRoom = async () => {
       try {
         // Step 1: Call the HTTP endpoint first to check if the room exists
@@ -118,8 +123,8 @@ export default function RoomPage({
         // Step 2: Room is valid! Stop loading and connect to socket.
         setIsValidating(false);
         socket.connect();
-        // Step 3: Send BOTH roomId and userName
-        socket.emit("room:join", { roomId, userName });
+        // Step 3: Send BOTH roomId and username
+        socket.emit("room:join", { roomId, username });
       } catch (error) {
         // Step 4: Room is INVALID. Show error and redirect.
         console.error("Failed to join room:", error);
@@ -211,7 +216,7 @@ export default function RoomPage({
 
       socket.disconnect();
     };
-  }, [roomId, userName, router]);
+  }, [roomId, username, router]);
 
   // --- 5. Add a Loading/Invalid State to the UI ---
   if (isValidating) {
@@ -226,8 +231,7 @@ export default function RoomPage({
   if (isInvalid) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center">
-        <X className="w-12 h-12 text-destructive mb-4" />
-        <p className="text-lg text-muted-foreground">Room not found.</p>
+        <p className="text-lg text-muted-foreground">Room not found</p>
         <p className="text-sm text-muted-foreground">
           Redirecting to home page...
         </p>
@@ -345,7 +349,7 @@ export default function RoomPage({
 
             <TabsContent value="chat" className="flex-1 flex flex-col">
               <ChatPanel
-                userName={userName}
+                username={username ?? ""}
                 roomId={roomId}
                 messages={messages}
               />
@@ -353,7 +357,7 @@ export default function RoomPage({
 
             <TabsContent value="people" className="flex-1 flex flex-col">
               <UserPanel
-                userName={userName}
+                username={username ?? ""}
                 onUserNameChange={onUserNameChange}
                 users={users}
               />

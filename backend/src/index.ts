@@ -70,8 +70,8 @@ const startServer = async () => {
 
     socket.on(
       "room:join",
-      async (data: { roomId: string; userName: string }) => {
-        const { roomId, userName } = data;
+      async (data: { roomId: string; username: string }) => {
+        const { roomId, username } = data;
 
         // Re-check existence just in case
         const roomExists = await redisClient.exists(`room:${roomId}`);
@@ -84,15 +84,15 @@ const startServer = async () => {
           return;
         }
 
-        // It saves your persistent userName (like "Sleepy Fox") and the roomId onto your temporary socket connection. This is so it knows who you are when you eventually disconnect.
+        // It saves your persistent username (like "Sleepy Fox") and the roomId onto your temporary socket connection. This is so it knows who you are when you eventually disconnect.
         socket.data.roomId = roomId;
-        socket.data.userName = userName;
+        socket.data.username = username;
 
         // adds your socket to the Socket.IO "room."
         socket.join(roomId);
 
-        // dds your userName to a persistent "who is in this room" list in Redis. This is the real list of users, which solves your refresh problem.
-        await redisClient.sAdd(`users:${roomId}`, userName);
+        // dds your username to a persistent "who is in this room" list in Redis. This is the real list of users, which solves your refresh problem.
+        await redisClient.sAdd(`users:${roomId}`, username);
 
         // Because you just joined, the server tells Redis to cancel any 5-minute self-destruct timers for the room's data. This ensures the room stays alive as long as people are in it.
         await redisClient.persist(`room:${roomId}`);
@@ -164,16 +164,16 @@ const startServer = async () => {
 
     socket.on(
       "chat:send",
-      async (data: { roomId: string; message: string; userName: string }) => {
+      async (data: { roomId: string; message: string; username: string }) => {
         const message = {
           id: `${socket.id}-${Date.now()}`,
           text: data.message,
-          user: data.userName,
+          user: data.username,
           timestamp: new Date().toLocaleTimeString("en-US", {
             hour: "2-digit",
             minute: "2-digit",
           }),
-          avatar: data.userName[0]?.toUpperCase() || "G",
+          avatar: data.username[0]?.toUpperCase() || "G",
           isSystem: false,
         };
 
@@ -187,10 +187,10 @@ const startServer = async () => {
 
     socket.on("disconnect", async () => {
       console.log(`[Socket.IO] User disconnected: ${socket.id}`);
-      const { roomId, userName } = socket.data;
+      const { roomId, username } = socket.data;
 
-      if (roomId && userName) {
-        await redisClient.sRem(`users:${roomId}`, userName);
+      if (roomId && username) {
+        await redisClient.sRem(`users:${roomId}`, username);
 
         // const userCount = await redisClient.sCard(`users:${roomId}`);
         const userList = await redisClient.sMembers(`users:${roomId}`);
