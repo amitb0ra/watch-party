@@ -46,26 +46,22 @@ export default function RoomPage({
   const router = useRouter();
   const { roomId } = use(params);
   const playerRef = useRef<HTMLVideoElement | null>(null);
-
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inputUrl, setInputUrl] = useState(
     "https://www.youtube.com/watch?v=aqz-KE-bpKQ"
   );
   const [roomState, setRoomState] = useState<RoomState | null>(null);
   const [serverClockOffset, setServerClockOffset] = useState(0);
-
   const [videoUrl, setVideoUrl] = useState<string | undefined>(undefined);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
-
   const [isValidating, setIsValidating] = useState(true);
   const [isInvalid, setIsInvalid] = useState(false);
   const [roomStatus, setRoomStatus] = useState("playing");
-
   const [messages, setMessages] = useState<Message[]>([]);
-
   const [users, setUsers] = useState<string[]>([]);
   const [username, setUserName] = useState<string | null>(null);
+  const [playerState, setPlayerState] = useState<RoomState | null>(null);
 
   useEffect(() => {
     const savedName = localStorage.getItem("username");
@@ -77,118 +73,6 @@ export default function RoomPage({
       setUserName(newName);
     }
   }, []);
-
-  const getCurrentTime = (): number => playerRef.current?.currentTime ?? 0;
-
-  const setPlayerRef = useCallback((player: HTMLVideoElement | null) => {
-    if (player) {
-      playerRef.current = player;
-    }
-  }, []);
-
-  const onLeave = () => {
-    socket.disconnect();
-    router.push("/");
-  };
-
-  const handleInvite = () => {
-    const inviteLink = `${window.location.origin}/room/${roomId}`;
-    navigator.clipboard.writeText(inviteLink);
-    setShowInviteModal(false);
-  };
-
-  const handleUrlChange = (e: FormEvent) => {
-    e.preventDefault();
-    if (inputUrl.trim()) {
-      socket.emit("video:change", { roomId, url: inputUrl });
-    }
-  };
-
-  const debouncedProposeState = useCallback(
-    debounce((state: { isPlaying: boolean; time: number }) => {
-      console.log("Debounced seek fired:", state);
-      socket.emit("video:propose_state", {
-        roomId,
-        ...state,
-      });
-    }, 500),
-    [roomId, socket]
-  );
-
-  const proposeStateChange = (state: { isPlaying: boolean; time: number }) => {
-    socket.emit("video:propose_state", {
-      roomId,
-      ...state,
-    });
-  };
-
-  const handlePlay = () => {
-    setIsPlaying(true);
-    proposeStateChange({ isPlaying: true, time: getCurrentTime() });
-  };
-
-  const handlePause = () => {
-    setIsPlaying(false);
-    proposeStateChange({ isPlaying: false, time: getCurrentTime() });
-  };
-
-  const debouncedSeek = useCallback(
-    debounce((time: number) => {
-      console.log("Proposing seek:", time);
-
-      socket.emit("video:propose_seek", { roomId, time });
-    }, 500),
-    [roomId, socket]
-  );
-
-  const handleSeeked = () => {
-    debouncedSeek(getCurrentTime());
-
-    console.log("Finished seeking, reporting ready.");
-    socket.emit("client:seek_ready", { roomId });
-  };
-
-  const setPlayerState = (state: RoomState) => {
-    setIsPlaying(state.isPlaying);
-
-    if (playerRef.current) {
-      if (state.isPlaying) {
-        playerRef.current.play();
-      } else {
-        playerRef.current.pause();
-      }
-
-      const timeDifference = Math.abs(
-        playerRef.current.currentTime - state.currentTime
-      );
-
-      if (timeDifference > 0.2) {
-        playerRef.current.currentTime = state.currentTime;
-      }
-    }
-  };
-
-  const syncClock = async () => {
-    let totalOffset = 0;
-    const pings = 3;
-
-    for (let i = 0; i < pings; i++) {
-      const clientStartTime = Date.now();
-      const { data } = await axios.get("http://localhost:8080/api/time");
-      const clientEndTime = Date.now();
-
-      const rtt = clientEndTime - clientStartTime;
-      const latency = rtt / 2;
-      const serverTime = data.serverTime;
-
-      const offset = serverTime + latency - clientEndTime;
-      totalOffset += offset;
-    }
-
-    const avgOffset = totalOffset / pings;
-    setServerClockOffset(avgOffset);
-    console.log(`Server clock offset calculated: ${avgOffset.toFixed(2)}ms`);
-  };
 
   useEffect(() => {
     if (!roomId) return;
@@ -221,15 +105,6 @@ export default function RoomPage({
     syncClock();
     socket.connect();
     socket.emit("room:join", { roomId, username });
-
-    const seekToTime = (time: number) => {
-      if (playerRef.current) {
-        const timeDifference = Math.abs(playerRef.current.currentTime - time);
-        if (timeDifference > 1.5) {
-          playerRef.current.currentTime = time;
-        }
-      }
-    };
 
     const handleChatHistory = (history: Message[]) => {
       setMessages(history);
@@ -378,6 +253,107 @@ export default function RoomPage({
     }, 500);
     return () => clearInterval(interval);
   }, [roomState]);
+
+  useEffect(() => {
+    if (!playerState || !playerRef.current) return;
+
+    setIsPlaying(playerState.isPlaying);
+
+    const video = playerRef.current;
+
+    if (playerState.isPlaying) {
+      video.play();
+    } else {
+      video.pause();
+    }
+
+    const diff = Math.abs(video.currentTime - playerState.currentTime);
+
+    if (diff > 0.2) {
+      video.currentTime = playerState.currentTime;
+    }
+  }, [playerState]);
+
+  const getCurrentTime = (): number => playerRef.current?.currentTime ?? 0;
+
+  const setPlayerRef = useCallback((player: HTMLVideoElement | null) => {
+    if (player) {
+      playerRef.current = player;
+    }
+  }, []);
+
+  const onLeave = () => {
+    socket.disconnect();
+    router.push("/");
+  };
+
+  const handleInvite = () => {
+    const inviteLink = `${window.location.origin}/room/${roomId}`;
+    navigator.clipboard.writeText(inviteLink);
+    setShowInviteModal(false);
+  };
+
+  const handleUrlChange = (e: FormEvent) => {
+    e.preventDefault();
+    if (inputUrl.trim()) {
+      socket.emit("video:change", { roomId, url: inputUrl });
+    }
+  };
+
+  const proposeStateChange = (state: { isPlaying: boolean; time: number }) => {
+    socket.emit("video:propose_state", {
+      roomId,
+      ...state,
+    });
+  };
+
+  const handlePlay = () => {
+    setIsPlaying(true);
+    proposeStateChange({ isPlaying: true, time: getCurrentTime() });
+  };
+
+  const handlePause = () => {
+    setIsPlaying(false);
+    proposeStateChange({ isPlaying: false, time: getCurrentTime() });
+  };
+
+  const debouncedSeek = useCallback(
+    debounce((time: number) => {
+      console.log("Proposing seek:", time);
+
+      socket.emit("video:propose_seek", { roomId, time });
+    }, 500),
+    [roomId, socket]
+  );
+
+  const handleSeeked = () => {
+    debouncedSeek(getCurrentTime());
+
+    console.log("Finished seeking, reporting ready.");
+    socket.emit("client:seek_ready", { roomId });
+  };
+
+  const syncClock = async () => {
+    let totalOffset = 0;
+    const pings = 3;
+
+    for (let i = 0; i < pings; i++) {
+      const clientStartTime = Date.now();
+      const { data } = await axios.get("http://localhost:8080/api/time");
+      const clientEndTime = Date.now();
+
+      const rtt = clientEndTime - clientStartTime;
+      const latency = rtt / 2;
+      const serverTime = data.serverTime;
+
+      const offset = serverTime + latency - clientEndTime;
+      totalOffset += offset;
+    }
+
+    const avgOffset = totalOffset / pings;
+    setServerClockOffset(avgOffset);
+    console.log(`Server clock offset calculated: ${avgOffset.toFixed(2)}ms`);
+  };
 
   if (isValidating) {
     return (
