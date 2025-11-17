@@ -48,7 +48,9 @@ export default function RoomPage({
   const playerRef = useRef<HTMLVideoElement | null>(null);
 
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inputUrl, setInputUrl] = useState("");
+  const [inputUrl, setInputUrl] = useState(
+    "https://www.youtube.com/watch?v=aqz-KE-bpKQ"
+  );
   const [roomState, setRoomState] = useState<RoomState | null>(null);
   const [serverClockOffset, setServerClockOffset] = useState(0);
   // video states
@@ -66,23 +68,6 @@ export default function RoomPage({
   // people states
   const [users, setUsers] = useState<string[]>([]);
   const [username, setUserName] = useState<string | null>(null);
-
-  const checkRoomExists = async () => {
-    try {
-      await axios.post("http://localhost:8080/api/check-room", {
-        roomId: roomId,
-      });
-      setIsValidating(false);
-    } catch (error) {
-      console.error("Room validation failed:", error);
-      toast.error("Room does not exist.");
-      setIsValidating(false);
-      setIsInvalid(true);
-      setTimeout(() => {
-        router.push("/");
-      }, 2000);
-    }
-  };
 
   useEffect(() => {
     const savedName = localStorage.getItem("username");
@@ -191,47 +176,61 @@ export default function RoomPage({
     }
   };
 
+  const syncClock = async () => {
+    let totalOffset = 0;
+    const pings = 3; // Ping 3 times for a rough average
+
+    for (let i = 0; i < pings; i++) {
+      const clientStartTime = Date.now();
+      const { data } = await axios.get("http://localhost:8080/api/time");
+      const clientEndTime = Date.now();
+
+      const rtt = clientEndTime - clientStartTime;
+      const latency = rtt / 2;
+      const serverTime = data.serverTime;
+
+      // This is the magic:
+      // (Server time + one-way-latency) - local "now"
+      const offset = serverTime + latency - clientEndTime;
+      totalOffset += offset;
+    }
+
+    const avgOffset = totalOffset / pings;
+    setServerClockOffset(avgOffset);
+    console.log(`Server clock offset calculated: ${avgOffset.toFixed(2)}ms`);
+  };
+
   useEffect(() => {
-    // --- NEW GUARD ---
-    if (!username || !isPlayerReady) {
+    if (!roomId) return;
+
+    const checkRoomExists = async () => {
+      try {
+        await axios.post("http://localhost:8080/api/check-room", {
+          roomId: roomId,
+        });
+        setIsValidating(false);
+      } catch (error) {
+        console.error("Room validation failed:", error);
+        toast.error("Room does not exist.");
+        setIsValidating(false);
+        setIsInvalid(true);
+        setTimeout(() => {
+          router.push("/");
+        }, 2000);
+      }
+    };
+
+    checkRoomExists();
+  }, [roomId, router]);
+
+  useEffect(() => {
+    if (isValidating || isInvalid || !username || !isPlayerReady) {
       return;
     }
-    // --- END NEW GUARD ---
 
-    checkRoomExists().then(() => {
-      syncClock();
-      socket.connect();
-      socket.emit("room:join", { roomId, username });
-    });
-
-    checkRoomExists().then(() => {
-      socket.connect();
-      socket.emit("room:join", { roomId, username });
-    });
-
-    const syncClock = async () => {
-      let totalOffset = 0;
-      const pings = 3; // Ping 3 times for a rough average
-
-      for (let i = 0; i < pings; i++) {
-        const clientStartTime = Date.now();
-        const { data } = await axios.get("http://localhost:8080/api/time");
-        const clientEndTime = Date.now();
-
-        const rtt = clientEndTime - clientStartTime;
-        const latency = rtt / 2;
-        const serverTime = data.serverTime;
-
-        // This is the magic:
-        // (Server time + one-way-latency) - local "now"
-        const offset = serverTime + latency - clientEndTime;
-        totalOffset += offset;
-      }
-
-      const avgOffset = totalOffset / pings;
-      setServerClockOffset(avgOffset);
-      console.log(`Server clock offset calculated: ${avgOffset.toFixed(2)}ms`);
-    };
+    syncClock();
+    socket.connect();
+    socket.emit("room:join", { roomId, username });
 
     const seekToTime = (time: number) => {
       if (playerRef.current) {
@@ -379,9 +378,10 @@ export default function RoomPage({
       socket.disconnect();
     };
   }, [
+    isValidating,
+    isInvalid,
     roomId,
     username,
-    router,
     videoUrl,
     setPlayerState,
     serverClockOffset,
