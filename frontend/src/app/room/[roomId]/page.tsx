@@ -60,8 +60,8 @@ export default function RoomPage({
   // room validation states
   const [isValidating, setIsValidating] = useState(true);
   const [isInvalid, setIsInvalid] = useState(false);
-  const [roomStatus, setRoomStatus] = useState("playing"); // <-- ADD THIS
-  const [isPlayerReady, setIsPlayerReady] = useState(false);
+  const [roomStatus, setRoomStatus] = useState("playing");
+
   // chat states
   const [messages, setMessages] = useState<Message[]>([]);
 
@@ -224,7 +224,7 @@ export default function RoomPage({
   }, [roomId, router]);
 
   useEffect(() => {
-    if (isValidating || isInvalid || !username || !isPlayerReady) {
+    if (isValidating || isInvalid || !username) {
       return;
     }
 
@@ -385,8 +385,7 @@ export default function RoomPage({
     videoUrl,
     setPlayerState,
     serverClockOffset,
-    isPlayerReady,
-  ]); // <-- ADD isPlayerReady
+  ]);
 
   // This NEW useEffect runs a PROACTIVE sync loop
   useEffect(() => {
@@ -547,10 +546,6 @@ export default function RoomPage({
                   // If we finished buffering, we are de-facto ready
                   console.log("Finished buffering, reporting ready.");
                   socket.emit("client:seek_ready", { roomId });
-                }}
-                onReady={() => {
-                  console.log("ReactPlayer is ready.");
-                  setIsPlayerReady(true);
                 }}
                 onError={(err) => {
                   console.error("Player error:", err);

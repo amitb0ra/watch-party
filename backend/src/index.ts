@@ -282,7 +282,7 @@ const startServer = async () => {
         await redisClient.hSet(`room:${data.roomId}`, {
           isPlaying: "false", // Force pause
           currentTime: data.time.toString(),
-          lastServerTimestamp: Date.now(), // This is valid now
+          lastServerTimestamp: Date.now().toString(),
         });
 
         // 2. Add a "room status" flag
@@ -331,9 +331,9 @@ const startServer = async () => {
         const roomState = await redisClient.hGetAll(`room:${roomId}`);
         const executionTimestamp = Date.now() + 300; // 300ms buffer
 
-        await redisClient.hSet(roomId, "isPlaying", "true");
+        await redisClient.hSet(`room:${roomId}`, "isPlaying", "true");
         await redisClient.hSet(
-          roomId,
+          `room:${roomId}`,
           "lastServerTimestamp",
           executionTimestamp.toString()
         );
