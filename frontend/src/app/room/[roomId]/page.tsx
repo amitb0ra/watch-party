@@ -113,18 +113,25 @@ export default function RoomPage({
     }
   };
 
+  const proposeStateChange = (state: { isPlaying: boolean; time: number }) => {
+    socket.emit("video:propose_state", {
+      roomId,
+      ...state,
+    });
+  };
+
   const handlePlay = () => {
     setIsPlaying(true);
-    socket.emit("video:play", { roomId, time: getCurrentTime() });
+    proposeStateChange({ isPlaying: true, time: getCurrentTime() });
   };
 
   const handlePause = () => {
     setIsPlaying(false);
-    socket.emit("video:pause", { roomId, time: getCurrentTime() });
+    proposeStateChange({ isPlaying: false, time: getCurrentTime() });
   };
 
   const handleSeeked = () => {
-    socket.emit("video:seek", { roomId, time: getCurrentTime() });
+    proposeStateChange({ isPlaying: isPlaying, time: getCurrentTime() });
   };
 
   useEffect(() => {
@@ -156,13 +163,6 @@ export default function RoomPage({
       setUsers(userList);
     };
 
-    socket.on("room:sync", (state) => {
-      console.log("Room state synced:", state);
-      setVideoUrl(state.videoUrl || undefined);
-      setIsPlaying(state.isPlaying);
-      seekToTime(state.currentTime);
-    });
-
     // Listen for the failure event from the backend
     socket.on("room:join_failed", (data) => {
       console.error("Socket join failed:", data.error);
@@ -170,46 +170,60 @@ export default function RoomPage({
       router.push("/");
     });
 
-    socket.on("video:changed", (state) => {
-      console.log("Video changed by other user:", state);
-      setVideoUrl(state.videoUrl || undefined);
-      setIsPlaying(state.isPlaying);
-      seekToTime(state.currentTime);
-    });
+    socket.on(
+      "room:state_update",
+      (state: {
+        videoUrl: string;
+        currentTime: number;
+        isPlaying: boolean;
+      }) => {
+        console.log("Authoritative state received:", state);
 
-    socket.on("video:played", (data: { time: number }) => {
-      console.log("Video played by other user");
-      setIsPlaying(true);
-      seekToTime(data.time);
-    });
+        // 1. Update Video URL if it's different
+        if (state.videoUrl && videoUrl !== state.videoUrl) {
+          setVideoUrl(state.videoUrl);
+        }
 
-    socket.on("video:paused", (data: { time: number }) => {
-      console.log("Video paused by other user");
-      setIsPlaying(false);
-      seekToTime(data.time);
-    });
+        // 2. Always update local playing state
+        setIsPlaying(state.isPlaying);
 
-    socket.on("video:seeked", (data: { time: number }) => {
-      console.log("Video seeked by other user");
-      seekToTime(data.time);
-    });
+        if (playerRef.current) {
+          // 3. Force player to match server's play/pause state.
+          // This is non-negotiable.
+          if (state.isPlaying) {
+            playerRef.current.play();
+          } else {
+            playerRef.current.pause();
+          }
+
+          // 4. Correct for time drift.
+          // This replaces your old 1.5s tolerance bug.
+          const timeDifference = Math.abs(
+            playerRef.current.currentTime - state.currentTime
+          );
+
+          // If drift is > 0.5s, force a seek.
+          // This prevents jitter but snaps back on major desync.
+          if (timeDifference > 0.5) {
+            console.log(
+              `Correcting drift. Server: ${state.currentTime}, Client: ${playerRef.current.currentTime}`
+            );
+            playerRef.current.currentTime = state.currentTime;
+          }
+        }
+      }
+    );
 
     socket.on("chat:history", handleChatHistory);
     socket.on("chat:receive", handleReceiveMessage);
     socket.on("room:users_update", handleUsersUpdate);
 
     return () => {
-      socket.off("room:sync");
       socket.off("room:join_failed");
-      socket.off("video:changed");
-      socket.off("video:played");
-      socket.off("video:paused");
-      socket.off("video:seeked");
-
+      socket.off("room:state_update");
       socket.off("chat:history", handleChatHistory);
       socket.off("chat:receive", handleReceiveMessage);
       socket.off("room:users_update", handleUsersUpdate);
-
       socket.disconnect();
     };
   }, [roomId, username, router]);

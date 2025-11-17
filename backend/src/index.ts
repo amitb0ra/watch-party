@@ -104,7 +104,8 @@ const startServer = async () => {
 
         const roomState = await redisClient.hGetAll(`room:${roomId}`);
 
-        socket.emit("room:sync", {
+        // Emit the authoritative state directly to the new user
+        socket.emit("room:state_update", {
           videoUrl: roomState.videoUrl || "",
           currentTime: parseFloat(roomState.currentTime || "0"),
           isPlaying: roomState.isPlaying === "true",
@@ -119,12 +120,14 @@ const startServer = async () => {
     );
 
     socket.on("video:change", async (data: { roomId: string; url: string }) => {
+      // Set the new state in Redis
       await redisClient.hSet(`room:${data.roomId}`, {
         videoUrl: data.url,
         currentTime: 0,
         isPlaying: "false",
       });
 
+      // Get the full authoritative state from Redis
       const roomState = await redisClient.hGetAll(`room:${data.roomId}`);
       const stateToEmit = {
         videoUrl: roomState.videoUrl || "",
@@ -132,33 +135,32 @@ const startServer = async () => {
         isPlaying: roomState.isPlaying === "true",
       };
 
-      io.to(data.roomId).emit("video:changed", stateToEmit);
+      // Broadcast the new authoritative state to EVERYONE
+      io.to(data.roomId).emit("room:state_update", stateToEmit);
     });
 
-    socket.on("video:play", async (data: { roomId: string; time: number }) => {
-      await redisClient.hSet(`room:${data.roomId}`, {
-        isPlaying: "true",
-        currentTime: data.time.toString(),
-      });
-      socket.to(data.roomId).emit("video:played", { time: data.time });
-    });
+    socket.on(
+      "video:propose_state",
+      async (data: { roomId: string; isPlaying: boolean; time: number }) => {
+        // 1. Update the authoritative state in Redis
+        await redisClient.hSet(`room:${data.roomId}`, {
+          isPlaying: data.isPlaying ? "true" : "false",
+          currentTime: data.time.toString(),
+        });
 
-    socket.on("video:pause", async (data: { roomId: string; time: number }) => {
-      await redisClient.hSet(`room:${data.roomId}`, {
-        isPlaying: "false",
-        currentTime: data.time.toString(),
-      });
-      socket.to(data.roomId).emit("video:paused", { time: data.time });
-    });
+        // 2. Get the full, updated state back from Redis
+        //    (This includes the videoUrl, which the client didn't send)
+        const roomState = await redisClient.hGetAll(`room:${data.roomId}`);
+        const stateToEmit = {
+          videoUrl: roomState.videoUrl || "",
+          currentTime: parseFloat(roomState.currentTime || "0"),
+          isPlaying: roomState.isPlaying === "true",
+        };
 
-    socket.on("video:seek", async (data: { roomId: string; time: number }) => {
-      await redisClient.hSet(
-        `room:${data.roomId}`,
-        "currentTime",
-        data.time.toString()
-      );
-      socket.to(data.roomId).emit("video:seeked", { time: data.time });
-    });
+        // 3. Broadcast this new authoritative state to EVERYONE
+        io.to(data.roomId).emit("room:state_update", stateToEmit);
+      }
+    );
 
     socket.on(
       "chat:send",
