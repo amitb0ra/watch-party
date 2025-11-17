@@ -48,9 +48,7 @@ export default function RoomPage({
   const playerRef = useRef<HTMLVideoElement | null>(null);
 
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inputUrl, setInputUrl] = useState(
-    "https://www.youtube.com/watch?v=aqz-KE-bpKQ"
-  );
+  const [inputUrl, setInputUrl] = useState("");
   const [roomState, setRoomState] = useState<RoomState | null>(null);
   const [serverClockOffset, setServerClockOffset] = useState(0);
   // video states
