@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Users } from "lucide-react";
-import { socket } from "@/lib/socket";
 
 interface UserPanelProps {
   username: string;
@@ -54,7 +52,6 @@ export function UserPanel({ username, users }: UserPanelProps) {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-foreground truncate">
                     {name}
-                    {/* Show a " (You)" badge if this is the current user */}
                     {name === username && (
                       <span className="text-xs text-muted-foreground">
                         {" "}

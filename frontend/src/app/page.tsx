@@ -1,6 +1,6 @@
 "use client";
 
-import { SetStateAction, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -109,7 +109,6 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted to-background p-6">
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
         <div className="mb-12 text-center space-y-3">
           <div className="flex items-center justify-center gap-2 mb-4">
             <Zap className="w-8 h-8 text-primary" />
@@ -123,7 +122,6 @@ export default function HomePage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
-          {/* Create Room Card */}
           <Card className="p-8 bg-gradient-to-br from-card to-card/80 border-border hover:border-primary/50 transition-all hover:shadow-lg flex flex-col">
             <div className="space-y-4">
               <div className="flex items-center gap-3">
@@ -173,8 +171,6 @@ export default function HomePage() {
               </Button>
             </div>
           </Card>
-
-          {/* Join Room Card */}
           <Card className="p-8 bg-gradient-to-br from-card to-card/80 border-border hover:border-primary/50 transition-all hover:shadow-lg flex flex-col">
             <div className="space-y-4">
               <div className="flex items-center gap-3">

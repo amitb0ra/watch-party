@@ -4,14 +4,13 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Smile } from "lucide-react";
+import { Smile } from "lucide-react";
 import { socket } from "@/lib/socket";
 import EmojiPicker, {
   type EmojiClickData,
   type EmojiStyle,
   Theme,
 } from "emoji-picker-react";
-import { SkinTones } from "emoji-picker-react";
 import { useTheme } from "next-themes";
 import { type Message } from "@/app/room/[roomId]/page";
 
@@ -32,7 +31,6 @@ export function ChatPanel({ username, roomId, messages }: ChatPanelProps) {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // This logic for closing the picker when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -68,11 +66,8 @@ export function ChatPanel({ username, roomId, messages }: ChatPanelProps) {
     }
   };
 
-  // The picker gives us an object, so we just get the emoji from it
   const addEmoji = (emojiData: EmojiClickData) => {
     setNewMessage(newMessage + emojiData.emoji);
-    // We can leave setShowEmojiPicker(false) if we want it to close on click
-    // Or remove it if we want the picker to stay open to add more emojis
     setShowEmojiPicker(false);
   };
 

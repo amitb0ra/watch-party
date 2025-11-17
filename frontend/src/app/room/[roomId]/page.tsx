@@ -35,7 +35,7 @@ export interface RoomState {
   videoUrl: string;
   currentTime: number;
   isPlaying: boolean;
-  lastServerTimestamp: number; // Add this
+  lastServerTimestamp: number;
 }
 
 export default function RoomPage({
@@ -53,19 +53,17 @@ export default function RoomPage({
   );
   const [roomState, setRoomState] = useState<RoomState | null>(null);
   const [serverClockOffset, setServerClockOffset] = useState(0);
-  // video states
+
   const [videoUrl, setVideoUrl] = useState<string | undefined>(undefined);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
-  // room validation states
+
   const [isValidating, setIsValidating] = useState(true);
   const [isInvalid, setIsInvalid] = useState(false);
   const [roomStatus, setRoomStatus] = useState("playing");
 
-  // chat states
   const [messages, setMessages] = useState<Message[]>([]);
 
-  // people states
   const [users, setUsers] = useState<string[]>([]);
   const [username, setUserName] = useState<string | null>(null);
 
@@ -113,8 +111,8 @@ export default function RoomPage({
         roomId,
         ...state,
       });
-    }, 500), // 500ms debounce. Tune as needed.
-    [roomId, socket] // Dependencies
+    }, 500),
+    [roomId, socket]
   );
 
   const proposeStateChange = (state: { isPlaying: boolean; time: number }) => {
@@ -134,11 +132,10 @@ export default function RoomPage({
     proposeStateChange({ isPlaying: false, time: getCurrentTime() });
   };
 
-  // The debounced seek handler:
   const debouncedSeek = useCallback(
     debounce((time: number) => {
       console.log("Proposing seek:", time);
-      // Do NOT set local state.
+
       socket.emit("video:propose_seek", { roomId, time });
     }, 500),
     [roomId, socket]
@@ -146,30 +143,25 @@ export default function RoomPage({
 
   const handleSeeked = () => {
     debouncedSeek(getCurrentTime());
-    // --- NEW ---
-    // Now that we have *finished* seeking, tell the server we are ready.
+
     console.log("Finished seeking, reporting ready.");
     socket.emit("client:seek_ready", { roomId });
   };
 
-  // Create a new helper function to apply state to the player
   const setPlayerState = (state: RoomState) => {
-    setIsPlaying(state.isPlaying); // This triggers the UI
+    setIsPlaying(state.isPlaying);
 
     if (playerRef.current) {
-      // Force player to match
       if (state.isPlaying) {
         playerRef.current.play();
       } else {
         playerRef.current.pause();
       }
 
-      // And force-seek to the new time.
       const timeDifference = Math.abs(
         playerRef.current.currentTime - state.currentTime
       );
 
-      // Use a larger tolerance here, as this is a hard command
       if (timeDifference > 0.2) {
         playerRef.current.currentTime = state.currentTime;
       }
@@ -178,7 +170,7 @@ export default function RoomPage({
 
   const syncClock = async () => {
     let totalOffset = 0;
-    const pings = 3; // Ping 3 times for a rough average
+    const pings = 3;
 
     for (let i = 0; i < pings; i++) {
       const clientStartTime = Date.now();
@@ -189,8 +181,6 @@ export default function RoomPage({
       const latency = rtt / 2;
       const serverTime = data.serverTime;
 
-      // This is the magic:
-      // (Server time + one-way-latency) - local "now"
       const offset = serverTime + latency - clientEndTime;
       totalOffset += offset;
     }
@@ -256,22 +246,18 @@ export default function RoomPage({
       (state: { currentTime: number; isPlaying: boolean; newUrl?: string }) => {
         console.log("Seek command received, seeking to:", state.currentTime);
 
-        // --- NEW LOGIC ---
         if (state.newUrl) {
           console.log("...and loading new URL:", state.newUrl);
           setVideoUrl(state.newUrl);
-          setInputUrl(state.newUrl); // Keep the input box in sync
+          setInputUrl(state.newUrl);
         }
-        // --- END NEW LOGIC ---
 
-        // This will trigger the player's onPause and seek
         setIsPlaying(state.isPlaying);
 
         if (playerRef.current) {
           playerRef.current.currentTime = state.currentTime;
         }
 
-        // We are now officially buffering/seeking
         setIsBuffering(true);
         setRoomStatus("seeking");
       }
@@ -280,32 +266,27 @@ export default function RoomPage({
     socket.on("video:execute_state", (state: RoomState) => {
       console.log("Coordinated state command received:", state);
 
-      // Store this new authoritative state
       setRoomState(state);
 
-      // Calculate *when* to execute this command
       const calculatedServerNow = Date.now() + serverClockOffset;
       const delay = state.lastServerTimestamp - calculatedServerNow;
 
       if (delay <= 0) {
-        // We're late. Execute immediately.
         console.log("Executing state command immediately (late).");
         setPlayerState(state);
       } else {
-        // We're early. Schedule the state change.
         console.log(`Scheduling state command in ${delay}ms.`);
         setTimeout(() => {
           console.log("Executing scheduled state command.");
           setPlayerState(state);
         }, delay);
       }
-      // If the command is to play, the room is no longer seeking
+
       if (state.isPlaying) {
-        setRoomStatus("playing"); // <-- ADD THIS
+        setRoomStatus("playing");
       }
     });
 
-    // Listen for the failure event from the backend
     socket.on("room:join_failed", (data) => {
       console.error("Socket join failed:", data.error);
       toast.error("Failed to connect to room. Please try again.");
@@ -315,25 +296,20 @@ export default function RoomPage({
     socket.on("room:state_update", (state: RoomState) => {
       console.log("Authoritative state received:", state);
       setRoomState(state);
-      // 1. Update Video URL if it's different
+
       if (state.videoUrl && videoUrl !== state.videoUrl) {
         setVideoUrl(state.videoUrl);
       }
 
-      // 2. Always update local playing state
       setIsPlaying(state.isPlaying);
 
       if (playerRef.current) {
-        // 3. Force player to match server's play/pause state.
-        // This is non-negotiable.
         if (state.isPlaying) {
           playerRef.current.play();
         } else {
           playerRef.current.pause();
         }
 
-        // 4. Correct for time drift.
-        // This replaces your old 1.5s tolerance bug.
         const calculatedServerNow = Date.now() + serverClockOffset;
         const serverTimeElapsed =
           (calculatedServerNow - state.lastServerTimestamp) / 1000.0;
@@ -345,10 +321,7 @@ export default function RoomPage({
           playerRef.current.currentTime - state.currentTime
         );
 
-        // If drift is > 0.5s, force a seek.
-        // This prevents jitter but snaps back on major desync.
         if (timeDifference > 0.75) {
-          // Increase tolerance slightly
           console.log(
             `Correcting drift. Server: ${state.currentTime}, Client: ${playerRef.current.currentTime}`
           );
@@ -387,11 +360,9 @@ export default function RoomPage({
     serverClockOffset,
   ]);
 
-  // This NEW useEffect runs a PROACTIVE sync loop
   useEffect(() => {
     const interval = setInterval(() => {
       if (playerRef.current && roomState && roomState.isPlaying) {
-        // Calculate what the time *should* be
         const serverTimeElapsed =
           (Date.now() - roomState.lastServerTimestamp) / 1000.0;
         const expectedVideoTime = roomState.currentTime + serverTimeElapsed;
@@ -399,17 +370,15 @@ export default function RoomPage({
         const currentVideoTime = playerRef.current.currentTime;
         const drift = currentVideoTime - expectedVideoTime;
 
-        // Correct if drift is significant (e.g., > 0.5s)
         if (Math.abs(drift) > 0.5) {
           console.warn(`Proactive sync. Drift: ${drift}s. Correcting.`);
           playerRef.current.currentTime = expectedVideoTime;
         }
       }
-    }, 500); // Check for drift every 500ms
+    }, 500);
     return () => clearInterval(interval);
-  }, [roomState]); // This loop re-evaluates whenever server state changes
+  }, [roomState]);
 
-  // validation loading state
   if (isValidating) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center">
@@ -419,7 +388,6 @@ export default function RoomPage({
     );
   }
 
-  // invalid room state
   if (isInvalid) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -516,7 +484,6 @@ export default function RoomPage({
           </div>
 
           <div className="flex-1 overflow-auto bg-black relative">
-            {/* --- ADD THIS OVERLAY --- */}
             {roomStatus === "seeking" && (
               <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center z-20">
                 <Loader2 className="w-12 h-12 animate-spin text-white mb-4" />
@@ -543,13 +510,13 @@ export default function RoomPage({
                 onPlaying={() => {
                   console.log("Client finished buffering.");
                   setIsBuffering(false);
-                  // If we finished buffering, we are de-facto ready
+
                   console.log("Finished buffering, reporting ready.");
                   socket.emit("client:seek_ready", { roomId });
                 }}
                 onError={(err) => {
                   console.error("Player error:", err);
-                  // Tell the server we are broken
+
                   socket.emit("client:player_error", {
                     roomId,
                     message: err.toString(),

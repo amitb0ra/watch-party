@@ -36,8 +36,6 @@ const nouns = [
   "Pizza",
 ];
 
-// 16 * 16 = 256 combinations
-
 export function generateRandomName() {
   const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
   const noun = nouns[Math.floor(Math.random() * nouns.length)];
