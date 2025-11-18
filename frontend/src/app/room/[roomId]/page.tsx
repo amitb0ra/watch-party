@@ -55,15 +55,23 @@ export default function RoomPage({
   const [isInvalid, setIsInvalid] = useState(false);
 
   const [roomState, setRoomState] = useState<RoomState | null>(null);
-  const [serverClockOffset, setServerClockOffset] = useState(0);
-  const [videoUrl, setVideoUrl] = useState<string | undefined>(undefined);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
   const [roomStatus, setRoomStatus] = useState("playing");
   const [messages, setMessages] = useState<Message[]>([]);
   const [users, setUsers] = useState<string[]>([]);
-
   const [playerState, setPlayerState] = useState<RoomState | null>(null);
+
+  const clockOffsetRef = useRef<number>(0);
+  const videoUrlRef = useRef<string | undefined>(undefined);
+
+  const setServerClockOffset = (offset: number) => {
+    clockOffsetRef.current = offset;
+  };
+
+  const setVideoUrl = (url?: string) => {
+    videoUrlRef.current = url;
+  };
 
   useEffect(() => {
     const lastUsername = localStorage.getItem("username");
@@ -131,7 +139,7 @@ export default function RoomPage({
 
       setRoomState(state);
 
-      const calculatedServerNow = Date.now() + serverClockOffset;
+      const calculatedServerNow = Date.now() + clockOffsetRef.current;
       const delay = state.lastServerTimestamp - calculatedServerNow;
 
       if (delay <= 0) {
@@ -160,7 +168,7 @@ export default function RoomPage({
       console.log("Authoritative state received:", state);
       setRoomState(state);
 
-      if (state.videoUrl && videoUrl !== state.videoUrl) {
+      if (state.videoUrl && videoUrlRef.current !== state.videoUrl) {
         setVideoUrl(state.videoUrl);
       }
 
@@ -173,7 +181,7 @@ export default function RoomPage({
           playerRef.current.pause();
         }
 
-        const calculatedServerNow = Date.now() + serverClockOffset;
+        const calculatedServerNow = Date.now() + clockOffsetRef.current;
         const serverTimeElapsed =
           (calculatedServerNow - state.lastServerTimestamp) / 1000.0;
 
@@ -213,15 +221,7 @@ export default function RoomPage({
       socket.off("client:force_disconnect");
       socket.disconnect();
     };
-  }, [
-    isValidating,
-    isInvalid,
-    roomId,
-    username,
-    videoUrl,
-    setPlayerState,
-    serverClockOffset,
-  ]);
+  }, [isValidating, isInvalid, roomId, username, router]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -468,12 +468,12 @@ export default function RoomPage({
                 </p>
               </div>
             )}
-            {videoUrl ? (
+            {videoUrlRef.current ? (
               <ReactPlayer
                 ref={setPlayerRef}
                 width="100%"
                 height="100%"
-                src={videoUrl}
+                src={videoUrlRef.current}
                 controls={true}
                 playing={isPlaying && !isBuffering}
                 onPlay={handlePlay}
