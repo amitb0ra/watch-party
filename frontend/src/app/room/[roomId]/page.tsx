@@ -62,6 +62,7 @@ export default function RoomPage({
   const [users, setUsers] = useState<string[]>([]);
   const [playerState, setPlayerState] = useState<RoomState | null>(null);
 
+  const seekOnReadyRef = useRef<number | null>(null);
   const clockOffsetRef = useRef<number>(0);
   const videoUrlRef = useRef<string | undefined>(undefined);
 
@@ -121,14 +122,12 @@ export default function RoomPage({
           console.log("...and loading new URL:", state.newUrl);
           setVideoUrl(state.newUrl);
           setInputUrl(state.newUrl);
-        }
-
-        setIsPlaying(state.isPlaying);
-
-        if (playerRef.current) {
+          seekOnReadyRef.current = state.currentTime;
+        } else if (playerRef.current) {
           playerRef.current.currentTime = state.currentTime;
         }
 
+        setIsPlaying(state.isPlaying);
         setIsBuffering(true);
         setRoomStatus("seeking");
       }
@@ -479,6 +478,16 @@ export default function RoomPage({
                 onPlay={handlePlay}
                 onPause={handlePause}
                 onSeeked={handleSeeked}
+                onReady={() => {
+                  console.log("Video is ready.");
+                  if (seekOnReadyRef.current !== null && playerRef.current) {
+                    console.log(
+                      `Video is ready, seeking to: ${seekOnReadyRef.current}`
+                    );
+                    playerRef.current.currentTime = seekOnReadyRef.current;
+                    seekOnReadyRef.current = null;
+                  }
+                }}
                 onWaiting={() => {
                   console.warn("Client is buffering...");
                   setIsBuffering(true);
